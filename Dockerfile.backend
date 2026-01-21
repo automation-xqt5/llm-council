@@ -1,0 +1,19 @@
+# Use a Python image with uv installed
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+
+WORKDIR /app
+
+# Copy dependency files
+COPY pyproject.toml uv.lock ./
+
+# Install dependencies
+RUN uv sync --frozen
+
+# Copy the rest of the code
+COPY . .
+
+# Expose the port mentioned in your CLAUDE.md
+EXPOSE 8001
+
+# Run the backend as a module
+CMD ["uv", "run", "python", "-m", "backend.main"]
