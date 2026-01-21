@@ -1,21 +1,43 @@
 services:
+  # --- BACKEND SERVICE (Python + FastAPI) ---
   backend:
     build:
       context: .
       dockerfile: Dockerfile.backend
+    image: llm-council-backend
+    container_name: llm-council-backend
     environment:
+      # This key must be set in Coolify Environment Variables
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      # Ensure Python logs are visible in Coolify
+      - PYTHONUNBUFFERED=1
+    volumes:
+      # Persist users and conversations JSON files
+      # This maps the internal /app/data folder to a persistent volume
+      - llm_council_data:/app/data
+    restart: always
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
       interval: 30s
       timeout: 10s
       retries: 3
 
+  # --- FRONTEND SERVICE (React + Vite + Nginx) ---
   frontend:
     build:
       context: .
       dockerfile: Dockerfile.frontend
       args:
+        # This is CRITICAL: Vite needs this URL during the build process
         - VITE_API_URL=${VITE_API_URL}
+    image: llm-council-frontend
+    container_name: llm-council-frontend
     depends_on:
       - backend
+    restart: always
+
+# --- PERSISTENT STORAGE DEFINITION ---
+volumes:
+  # This creates a named volume that Coolify will manage
+  llm_council_data:
+    driver: local
