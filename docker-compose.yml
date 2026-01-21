@@ -16,6 +16,6 @@ services:
       context: .
       dockerfile: Dockerfile.frontend
       args:
-        - VITE_API_URL=https://council-api.automatedbyeduard.com
+        - VITE_API_URL=${VITE_API_URL}
     depends_on:
       - backend
