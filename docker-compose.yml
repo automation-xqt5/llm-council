@@ -9,6 +9,8 @@ services:
     environment:
       # This key must be set in Coolify Environment Variables
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - admin_user=${admin_user}
+      - admin_pw=${admin_pw}
       # Ensure Python logs are visible in Coolify
       - PYTHONUNBUFFERED=1
     volumes:
