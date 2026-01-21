@@ -1,24 +1,30 @@
 /**
  * API client for the LLM Council backend with PDF support.
+ * Optimized for Coolify deployment with subdomains.
  */
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8001';
+// Use VITE_API_URL from environment variables (configured in Coolify/Docker)
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8001';
 
 let authToken = null;
 
 export const api = {
   /**
-   * Set authentication token
+   * Set authentication token for subsequent requests
    */
   setToken(token) {
     authToken = token;
   },
 
   /**
-   * Get authentication headers
+   * Get authentication headers. 
+   * @param {boolean} isJson - If true, adds Content-Type: application/json
    */
-  getAuthHeaders() {
-    const headers = { 'Content-Type': 'application/json' };
+  getAuthHeaders(isJson = true) {
+    const headers = {};
+    if (isJson) {
+      headers['Content-Type'] = 'application/json';
+    }
     if (authToken) {
       headers['Authorization'] = `Bearer ${authToken}`;
     }
@@ -36,27 +42,17 @@ export const api = {
         body: JSON.stringify({ username, email, password }),
       });
       if (!response.ok) {
-        let errorMessage = 'Failed to register';
-        try {
-          const error = await response.json();
-          errorMessage = error.detail || errorMessage;
-        } catch (e) {
-          errorMessage = `Server error: ${response.status} ${response.statusText}`;
-        }
-        throw new Error(errorMessage);
+        const error = await response.json().catch(() => ({ detail: 'Failed to register' }));
+        throw new Error(error.detail || `Server error: ${response.status}`);
       }
       return response.json();
     } catch (error) {
-      if (error.message && !error.message.includes('Server error')) {
-        throw error;
-      }
-      // Network error or fetch failed
-      throw new Error(`Cannot connect to server. Please check if the backend is running at ${API_BASE}`);
+      throw new Error(error.message || "Connection failed");
     }
   },
 
   /**
-   * Login
+   * Login and receive token
    */
   async login(username, password) {
     try {
@@ -66,27 +62,17 @@ export const api = {
         body: JSON.stringify({ username, password }),
       });
       if (!response.ok) {
-        let errorMessage = 'Failed to login';
-        try {
-          const error = await response.json();
-          errorMessage = error.detail || errorMessage;
-        } catch (e) {
-          errorMessage = `Server error: ${response.status} ${response.statusText}`;
-        }
-        throw new Error(errorMessage);
+        const error = await response.json().catch(() => ({ detail: 'Failed to login' }));
+        throw new Error(error.detail || `Server error: ${response.status}`);
       }
       return response.json();
     } catch (error) {
-      if (error.message && !error.message.includes('Server error')) {
-        throw error;
-      }
-      // Network error or fetch failed
-      throw new Error(`Cannot connect to server. Please check if the backend is running at ${API_BASE}`);
+      throw new Error(error.message || "Connection failed");
     }
   },
 
   /**
-   * Get current user info
+   * Get current user profile
    */
   async getCurrentUser() {
     const response = await fetch(`${API_BASE}/api/auth/me`, {
@@ -95,28 +81,20 @@ export const api = {
     if (!response.ok) throw new Error('Failed to fetch user info');
     return response.json();
   },
+
   /**
-   * List all conversations
+   * List all conversations for the user
    */
   async listConversations() {
     const response = await fetch(`${API_BASE}/api/conversations`, {
       headers: this.getAuthHeaders(),
     });
-    if (!response.ok) {
-      let errorMessage = 'Failed to fetch conversations';
-      try {
-        const error = await response.json();
-        errorMessage = error.detail || errorMessage;
-      } catch (e) {
-        errorMessage = `Server error: ${response.status} ${response.statusText}`;
-      }
-      throw new Error(errorMessage);
-    }
+    if (!response.ok) throw new Error('Failed to fetch conversations');
     return response.json();
   },
 
   /**
-   * Create a new conversation
+   * Create a new conversation session
    */
   async createConversation() {
     const response = await fetch(`${API_BASE}/api/conversations`, {
@@ -129,21 +107,14 @@ export const api = {
   },
 
   /**
-   * Get a specific conversation
+   * Get messages and metadata for a specific conversation
    */
   async getConversation(conversationId) {
     const response = await fetch(`${API_BASE}/api/conversations/${conversationId}`, {
       headers: this.getAuthHeaders(),
     });
     if (!response.ok) {
-      let errorMessage = `Failed to fetch conversation (${response.status})`;
-      try {
-        const error = await response.json();
-        errorMessage = error.detail || errorMessage;
-      } catch (e) {
-        errorMessage = `Server error: ${response.status} ${response.statusText}`;
-      }
-      const error = new Error(errorMessage);
+      const error = new Error(`Conversation not found (${response.status})`);
       error.status = response.status;
       throw error;
     }
@@ -163,7 +134,7 @@ export const api = {
   },
 
   /**
-   * Send a message (non-streaming)
+   * Send a message. If pdfData is provided, the backend will trigger the OCR flow.
    */
   async sendMessage(conversationId, content, pdfData = null, pdfFilename = null) {
     const response = await fetch(`${API_BASE}/api/conversations/${conversationId}/message`, {
@@ -180,7 +151,7 @@ export const api = {
   },
 
   /**
-   * Send a message with streaming response
+   * Send a message with Server-Sent Events (SSE) streaming
    */
   async sendMessageStream(conversationId, content, onStage1, onStage2, onStage3, onTitleUpdate, pdfData = null, pdfFilename = null) {
     const response = await fetch(`${API_BASE}/api/conversations/${conversationId}/message/stream`, {
@@ -193,7 +164,7 @@ export const api = {
       }),
     });
 
-    if (!response.ok) throw new Error('Failed to send message');
+    if (!response.ok) throw new Error('Failed to initiate stream');
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -213,29 +184,14 @@ export const api = {
           try {
             const parsed = JSON.parse(data);
             switch (parsed.type) {
-              case 'stage1_complete':
-                onStage1?.(parsed.data);
-                break;
-              case 'stage2_complete':
-                onStage2?.(parsed.data, parsed.metadata);
-                break;
-              case 'stage3_complete':
-                onStage3?.(parsed.data);
-                break;
-              case 'title_complete':
-                onTitleUpdate?.(parsed.data?.title);
-                break;
-              case 'complete':
-                // Streaming complete
-                return;
-              case 'error':
-                throw new Error(parsed.message || 'Unknown error');
+              case 'stage1_complete': onStage1?.(parsed.data); break;
+              case 'stage2_complete': onStage2?.(parsed.data, parsed.metadata); break;
+              case 'stage3_complete': onStage3?.(parsed.data); break;
+              case 'title_complete': onTitleUpdate?.(parsed.data?.title); break;
+              case 'error': throw new Error(parsed.message || 'Stream error');
             }
           } catch (e) {
-            if (e.message && !e.message.includes('JSON')) {
-              throw e; // Re-throw non-JSON errors
-            }
-            console.error('Failed to parse SSE data:', e);
+            console.error('SSE Parse Error:', e);
           }
         }
       }
@@ -243,21 +199,18 @@ export const api = {
   },
 
   /**
-   * Upload a PDF file and get base64 encoding
-   * The PDF will be sent to OpenRouter for native processing
+   * Uploads a PDF file to get its base64 representation.
+   * Note: The backend will then use this base64 to perform Mistral OCR.
    */
   async uploadPdf(file) {
     const formData = new FormData();
     formData.append('file', file);
 
-    const headers = {};
-    if (authToken) {
-      headers['Authorization'] = `Bearer ${authToken}`;
-    }
-
+    // Important: Do not set Content-Type header when sending FormData, 
+    // the browser will set it automatically with the correct boundary.
     const response = await fetch(`${API_BASE}/api/upload-pdf`, {
       method: 'POST',
-      headers,
+      headers: this.getAuthHeaders(false), 
       body: formData,
     });
 
@@ -266,6 +219,6 @@ export const api = {
       throw new Error(error.detail || 'Failed to upload PDF');
     }
 
-    return response.json();
+    return response.json(); // Returns { pdf_data: "base64...", filename: "..." }
   },
 };
