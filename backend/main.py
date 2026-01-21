@@ -21,8 +21,9 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173", 
         "http://localhost:3000",
-        "https://llm-council-frontend.xqtfive.de",
-        "https://llm-frontend.xqtfive.de"
+        "https://council-api.automatedbyeduard.com"
+        #"https://llm-council-frontend.xqtfive.de",
+        #"https://llm-frontend.xqtfive.de"
     ],
     allow_credentials=True,
     allow_methods=["*"],
