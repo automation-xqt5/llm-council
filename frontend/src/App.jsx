@@ -469,7 +469,7 @@ function App() {
     <div className="app">
       <aside className="sidebar">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <h1>LLM Council</h1>
+          <h1>XQT5 Five AI's</h1>
           <button 
             className="logout-btn" 
             onClick={logout}
@@ -512,7 +512,7 @@ function App() {
       <main className="chat-area">
         {!currentConversation ? (
           <div className="welcome">
-            <h2>Welcome to LLM Council</h2>
+            <h2>Welcome to XQT5 five AI's</h2>
             <p>Create a new conversation to get started</p>
           </div>
         ) : (
